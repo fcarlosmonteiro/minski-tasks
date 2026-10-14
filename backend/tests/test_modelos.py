@@ -54,7 +54,11 @@ def test_concluir_preenche_e_reabrir_apaga_concluida_em(app):
     t = salvar(Tarefa(lista_id=salvar(Lista(nome="L")).id, titulo="x"))
     t.concluida = True
     db.session.commit()
-    assert t.concluida_em is not None
+    concluida_em = t.concluida_em
+    assert concluida_em is not None
+    t.concluida = True  # clique repetido: não regrava a data (comparação com microssegundos)
+    db.session.commit()
+    assert t.concluida_em == concluida_em
     t.concluida = False
     db.session.commit()
     assert t.concluida_em is None
@@ -81,7 +85,7 @@ def test_nome_da_lista_unico_sem_diferenciar_maiusculas(app):
 
 def test_persistencia_basica_via_schemas(app):
     lista = salvar(Lista(**ListaSchema().load({"nome": "  Universidade  "})))
-    tarefa = salvar(Tarefa(**TarefaSchema().load({"lista_id": lista.id, "titulo": " Ler "})))
+    tarefa = salvar(Tarefa(lista_id=lista.id, **TarefaSchema().load({"titulo": " Ler "})))
     db.session.expire_all()
 
     assert ListaSchema().dump(db.session.get(Lista, lista.id))["nome"] == "Universidade"
@@ -94,9 +98,9 @@ def test_persistencia_basica_via_schemas(app):
     [
         (ListaSchema, {"nome": "   "}),
         (ListaSchema, {"nome": "x" * 61}),
-        (TarefaSchema, {"lista_id": 1, "titulo": ""}),
-        (TarefaSchema, {"lista_id": 1, "titulo": "x" * 201}),
-        (TarefaSchema, {"titulo": "sem lista"}),
+        (TarefaSchema, {"titulo": ""}),
+        (TarefaSchema, {"titulo": "x" * 201}),
+        (TarefaSchema, {}),
     ],
 )
 def test_schemas_recusam_dados_invalidos(schema, dados):
