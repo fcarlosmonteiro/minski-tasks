@@ -1,3 +1,5 @@
 [tool.pytest.ini_options]
-pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.ruff]
+src = ["."]  # minski é first-party mesmo rodando o ruff da raiz

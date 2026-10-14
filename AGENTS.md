@@ -55,8 +55,8 @@ rather than deciding the scope yourself.
 
 These have to pass before anything is submitted.
 
-- Tests: `cd backend && pytest` · `cd frontend && npx vitest run` (frontend ainda não existe)
-- Lint: `cd backend && ruff check .` · `cd frontend && npx eslint . && npx prettier --check .` (frontend ainda não existe)
+- Tests: `pytest` (ou `cd backend && pytest`) · `cd frontend && npx vitest run` (frontend ainda não existe)
+- Lint: `ruff check .` (ou `cd backend && ruff check .`) · `cd frontend && npx eslint . && npx prettier --check .` (frontend ainda não existe)
 - Build: `cd frontend && npx vite build` (frontend ainda não existe)
 
 Backend: `python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt`, depois os comandos acima com `.venv/bin/` no `PATH`.
