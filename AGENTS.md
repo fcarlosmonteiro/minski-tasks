@@ -55,9 +55,11 @@ rather than deciding the scope yourself.
 
 These have to pass before anything is submitted.
 
-- Tests: TO BE FILLED
-- Lint: TO BE FILLED
-- Build: TO BE FILLED
+- Tests: `cd backend && pytest` · `cd frontend && npx vitest run` (frontend ainda não existe)
+- Lint: `cd backend && ruff check .` · `cd frontend && npx eslint . && npx prettier --check .` (frontend ainda não existe)
+- Build: `cd frontend && npx vite build` (frontend ainda não existe)
+
+Backend: `python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt`, depois os comandos acima com `.venv/bin/` no `PATH`.
 
 Run them before you change anything and write down what already fails. Run
 them again afterwards and compare. A failure that was already there is not a

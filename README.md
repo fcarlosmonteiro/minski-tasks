@@ -23,3 +23,13 @@ Ajudar pessoas e equipes a organizar tarefas e responsabilidades, decidir o que 
 | Arquitetura | Monolito |
 
 O backend e a interface convivem no mesmo aplicativo: Python no servidor, HTML, CSS e JavaScript no cliente, e SQLite como banco local da aplicação, hospedado na AWS.
+
+## Desenvolvimento
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r backend/requirements.txt
+cd backend
+pytest && ruff check .        # gates do backend
+flask --app minski run        # cria backend/instance/minski.db na primeira execução
+```
