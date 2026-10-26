@@ -38,15 +38,24 @@ export async function api(caminho, { method = "GET", body } = {}) {
   return dados;
 }
 
-/** Toda falha de query ou mutation vira um aviso; os dados já em cache continuam na tela. */
+/**
+ * Toda falha vira um aviso e os dados já em cache continuam na tela. Um 404 recarrega as listas
+ * (lista excluída em outra aba). Formulários (meta.noFormulario) mostram 400/409 no campo.
+ */
 export function criarQueryClient(avisar) {
-  const onError = (erro) =>
+  const onError = (erro, _variaveis, _contexto, mutation) => {
+    if (erro?.status === 404)
+      client.invalidateQueries({ queryKey: ["listas"] });
+    if (mutation?.meta?.noFormulario && [400, 409].includes(erro?.status))
+      return;
     avisar(erro instanceof ApiError ? erro.message : SEM_CONEXAO);
-  return new QueryClient({
+  };
+  const client = new QueryClient({
     queryCache: new QueryCache({ onError }),
     mutationCache: new MutationCache({ onError }),
     defaultOptions: { queries: { retry: false } },
   });
+  return client;
 }
 
 // Mesmas regras de texto do servidor (trim antes de validar); o servidor continua a autoridade.

@@ -1,7 +1,8 @@
-import { QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, Route, Routes } from "react-router";
-import { api, criarQueryClient } from "./api.js";
+import { criarQueryClient } from "./api.js";
+import Listas from "./Listas.jsx";
 
 export function BoasVindas() {
   return (
@@ -14,25 +15,6 @@ export function BoasVindas() {
       <Link to="/listas" className="btn btn-primary btn-lg">
         Entrar
       </Link>
-    </main>
-  );
-}
-
-export function Listas() {
-  const { data: listas = [] } = useQuery({
-    queryKey: ["listas"],
-    queryFn: () => api("/listas"),
-  });
-  return (
-    <main className="container py-4">
-      <h1 className="h3">Listas</h1>
-      <ul className="list-group">
-        {listas.map((lista) => (
-          <li key={lista.id} className="list-group-item">
-            {lista.nome}
-          </li>
-        ))}
-      </ul>
     </main>
   );
 }

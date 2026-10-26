@@ -38,10 +38,15 @@ test("tela inicial mostra nome, frase e Entrar, sem login", () => {
 });
 
 test("Entrar leva às listas", async () => {
-  respostas({ status: 200, body: [{ id: 1, nome: "Trabalho", ordem: 0 }] });
+  respostas(
+    { status: 200, body: [{ id: 1, nome: "Trabalho", ordem: 0 }] },
+    { status: 200, body: { pendentes: [], concluidas: [] } },
+  );
   abrir("/");
   await userEvent.click(screen.getByRole("link", { name: "Entrar" }));
-  expect(await screen.findByText("Trabalho")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("heading", { name: "Trabalho" }),
+  ).toBeInTheDocument();
 });
 
 test("rota das listas abre direto pelo endereço", async () => {
@@ -50,7 +55,9 @@ test("rota das listas abre direto pelo endereço", async () => {
     body: [{ id: 1, nome: "Pessoal", ordem: 0 }],
   });
   abrir("/listas");
-  expect(await screen.findByText("Pessoal")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("heading", { name: "Pessoal" }),
+  ).toBeInTheDocument();
   expect(fetch).toHaveBeenCalledWith("/api/listas", expect.anything());
 });
 
