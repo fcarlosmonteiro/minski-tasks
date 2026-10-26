@@ -120,6 +120,7 @@ def create_app(config=None):
         return e
 
     @app.get("/")
+    @app.get("/listas")  # rota do React Router aberta direto pelo endereço
     def index():
         return app.send_static_file("index.html")
 
