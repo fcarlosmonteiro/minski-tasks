@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: pip install -r backend/requirements.txt
+      - run: pytest
+      - run: ruff check .
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm ci
+      - run: npx vitest run
+      - run: npx eslint .
+      - run: npx prettier --check .
+      - run: npx vite build
+
+  # Decisão Q6: bloqueia qualquer segredo e achados HIGH/CRITICAL; MEDIUM/LOW
+  # ficam no log como findings, sem bloquear.
+  seguranca:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks varre o histórico inteiro
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: pip install semgrep==1.163.0 pip-audit==2.9.0
+
+      - name: Semgrep (todos os achados, informativo)
+        run: semgrep scan --config p/default --metrics off
+      - name: Semgrep (bloqueia severidade ERROR = HIGH)
+        run: semgrep scan --config p/default --metrics off --severity ERROR --error
+
+      - name: gitleaks (bloqueia qualquer segredo)
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 git /repo --redact
+
+      # pip-audit não informa severidade; sem como separar HIGH de LOW, qualquer
+      # vulnerabilidade conhecida bloqueia.
+      - name: pip-audit
+        run: pip-audit -r backend/requirements.txt
+
+      - name: npm audit (todos os achados, informativo)
+        working-directory: frontend
+        run: npm audit || true
+      - name: npm audit (bloqueia HIGH/CRITICAL)
+        working-directory: frontend
+        run: npm audit --audit-level=high

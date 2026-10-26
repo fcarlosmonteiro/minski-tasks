@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import ClassVar
 
-from flask import Flask, abort, make_response, request
+from flask import Flask, abort, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from marshmallow import Schema, ValidationError, fields, validate
 from sqlalchemy import event
@@ -63,7 +63,9 @@ def corpo_de_erro(status, mensagem):
 
 
 def falhar(status, mensagem):
-    abort(make_response(corpo_de_erro(status, mensagem), status))
+    resposta = jsonify(corpo_de_erro(status, mensagem))
+    resposta.status_code = status
+    abort(resposta)
 
 
 def carregar(schema, mensagem=None):

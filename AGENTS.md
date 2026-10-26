@@ -55,11 +55,17 @@ rather than deciding the scope yourself.
 
 These have to pass before anything is submitted.
 
-- Tests: `pytest` (ou `cd backend && pytest`) · `cd frontend && npx vitest run` (frontend ainda não existe)
-- Lint: `ruff check .` (ou `cd backend && ruff check .`) · `cd frontend && npx eslint . && npx prettier --check .` (frontend ainda não existe)
-- Build: `cd frontend && npx vite build` (frontend ainda não existe)
+- Tests: `pytest` (ou `cd backend && pytest`) · `cd frontend && npx vitest run`
+- Lint: `ruff check .` · `cd frontend && npx eslint . && npx prettier --check .`
+- Build: `cd frontend && npx vite build`
+- Security (decisão Q6: bloqueia segredo e HIGH/CRITICAL; MEDIUM/LOW só registrados):
+  `semgrep scan --config p/default --metrics off --severity ERROR --error` ·
+  `docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 git /repo --redact` ·
+  `pip-audit -r backend/requirements.txt` · `cd frontend && npm audit --audit-level=high`
 
 Backend: `python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt`, depois os comandos acima com `.venv/bin/` no `PATH`.
+Frontend: `cd frontend && npm ci`. Scanners: `pip install semgrep==1.163.0 pip-audit==2.9.0` e Docker para o gitleaks.
+O CI (`.github/workflows/ci.yml`) roda todos esses gates.
 
 Run them before you change anything and write down what already fails. Run
 them again afterwards and compare. A failure that was already there is not a
