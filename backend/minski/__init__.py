@@ -21,7 +21,8 @@ def _ligar_foreign_keys(dbapi_conn, _record):
 
 
 class Base(Schema):
-    error_messages: ClassVar[dict] = {"unknown": "Campo não permitido."}
+    NAO_PERMITIDO = "Campo não permitido."
+    error_messages: ClassVar[dict] = {"unknown": NAO_PERMITIDO}
 
 
 class Texto(fields.String):
@@ -40,8 +41,9 @@ class Booleano(fields.Field):
     """Só aceita true/false do JSON (fields.Boolean aceitaria "sim", 1, "0"...)."""
 
     def __init__(self, **kwargs):
-        msg = "Deve ser verdadeiro ou falso."
-        super().__init__(error_messages={"null": msg, "invalid": msg}, **kwargs)
+        msg = "Informe concluida como verdadeiro ou falso."
+        mensagens = {"required": msg, "null": msg, "invalid": msg}
+        super().__init__(error_messages=mensagens, **kwargs)
 
     def _deserialize(self, value, attr, data, **kwargs):
         if not isinstance(value, bool):
@@ -53,29 +55,37 @@ class Ordem(Base):
     ids = fields.List(fields.Raw(), required=True)
 
 
-def falhar(status, corpo):
-    abort(make_response(corpo, status))
+CODIGOS = {400: "VALIDACAO", 404: "NAO_ENCONTRADO", 409: "DUPLICADO"}
 
 
-def carregar(schema, **mensagens):
-    """Valida o corpo JSON com `schema`; 400 {"erros": {campo: mensagem}} se falhar."""
+def corpo_de_erro(status, mensagem):
+    return {"erro": {"codigo": CODIGOS[status], "mensagem": mensagem}}
+
+
+def falhar(status, mensagem):
+    abort(make_response(corpo_de_erro(status, mensagem), status))
+
+
+def carregar(schema, mensagem=None):
+    """Valida o corpo JSON com `schema`; 400 VALIDACAO com a primeira mensagem se falhar."""
     dados = request.get_json(silent=True)
     if not isinstance(dados, dict):
-        falhar(400, {"erros": {"corpo": "Envie um JSON válido."}})
+        falhar(400, "Envie um JSON válido.")
     try:
         return schema.load(dados)
     except ValidationError as e:
-        falhar(400, {"erros": {
-            campo: mensagens.get(campo) or (msgs[0] if isinstance(msgs, list) else str(msgs))
-            for campo, msgs in e.messages.items()
-        }})
+        if mensagem:
+            falhar(400, mensagem)
+        campo, msgs = next(iter(e.messages.items()))
+        texto = msgs[0] if isinstance(msgs, list) else str(msgs)
+        falhar(400, f"{texto} ({campo})" if texto == Base.NAO_PERMITIDO else texto)
 
 
 def ler_ordem(atuais, mensagem):
     """ids do corpo, exigindo exatamente o conjunto `atuais`, sem repetição."""
-    ids = carregar(Ordem(), ids=mensagem)["ids"]
+    ids = carregar(Ordem(), mensagem)["ids"]
     if any(type(i) is not int for i in ids) or len(ids) != len(set(ids)) or set(ids) != atuais:
-        falhar(400, {"erros": {"ids": mensagem}})
+        falhar(400, mensagem)
     return ids
 
 
@@ -101,6 +111,13 @@ def create_app(config=None):
     with app.app_context():
         # ponytail: create_all só cria o que falta; Flask-Migrate na 1ª mudança de schema.
         db.create_all()
+
+    @app.errorhandler(404)
+    def nao_encontrado(e):
+        # Rota inexistente sob /api também segue o formato de erro da Spec.
+        if request.path.startswith("/api/"):
+            return corpo_de_erro(404, "Recurso não encontrado."), 404
+        return e
 
     @app.get("/")
     def index():

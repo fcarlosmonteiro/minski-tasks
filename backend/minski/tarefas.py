@@ -3,7 +3,7 @@ from typing import ClassVar
 
 from flask import Blueprint
 from marshmallow import fields
-from sqlalchemy import func, select, text
+from sqlalchemy import select, text
 from sqlalchemy.orm import validates
 
 from minski import (
@@ -66,32 +66,30 @@ class TarefaSchema(Base):
     titulo = Texto(
         "Informe o título da tarefa.", "O título da tarefa pode ter no máximo 200 caracteres.", 200
     )
-    concluida = Booleano()
+    concluida = Booleano(required=True)
     ordem = fields.Integer(dump_only=True)
     concluida_em = fields.DateTime(DATA_HORA, dump_only=True)
 
 
-def pendentes_por_lista():
-    """{lista_id: quantidade de tarefas pendentes}; listas sem pendentes ficam de fora."""
-    consulta = (
-        select(Tarefa.lista_id, func.count())
-        .where(Tarefa.concluida.is_(False))
-        .group_by(Tarefa.lista_id)
-    )
-    return dict(db.session.execute(consulta).all())
-
-
 def _exigir_lista(lista_id):
     if not listas.existe(lista_id):
-        falhar(404, {"erro": "Lista não encontrada."})
+        falhar(404, "Lista não encontrada.")
 
 
 def _obter(tarefa_id):
-    return db.session.get(Tarefa, tarefa_id) or falhar(404, {"erro": "Tarefa não encontrada."})
+    return db.session.get(Tarefa, tarefa_id) or falhar(404, "Tarefa não encontrada.")
 
 
 def _da_lista(lista_id, concluida):
     return select(Tarefa).where(Tarefa.lista_id == lista_id, Tarefa.concluida.is_(concluida))
+
+
+def _exigir_titulo_livre(lista_id, titulo):
+    # Pendentes e concluídas da lista; casefold como em listas._exigir_nome_livre.
+    alvo = titulo.casefold()
+    titulos = db.session.scalars(select(Tarefa.titulo).where(Tarefa.lista_id == lista_id))
+    if any(t.casefold() == alvo for t in titulos):
+        falhar(409, "Já existe uma tarefa com esse título nesta lista.")
 
 
 @bp.get("/listas/<int:lista_id>/tarefas")
@@ -99,45 +97,42 @@ def listar(lista_id):
     _exigir_lista(lista_id)
     pendentes = _da_lista(lista_id, False).order_by(Tarefa.ordem, Tarefa.id)
     concluidas = _da_lista(lista_id, True).order_by(Tarefa.concluida_em.desc(), Tarefa.id.desc())
-    todas = [*db.session.scalars(pendentes), *db.session.scalars(concluidas)]
-    return TarefaSchema(many=True).dump(todas)
+    dump = TarefaSchema(many=True).dump
+    return {
+        "pendentes": dump(db.session.scalars(pendentes)),
+        "concluidas": dump(db.session.scalars(concluidas)),
+    }
 
 
 @bp.post("/listas/<int:lista_id>/tarefas")
 def criar(lista_id):
     _exigir_lista(lista_id)
-    tarefa = Tarefa(lista_id=lista_id, **carregar(TarefaSchema(only=("titulo",))))
+    dados = carregar(TarefaSchema(only=("titulo",)))
+    _exigir_titulo_livre(lista_id, dados["titulo"])
+    tarefa = Tarefa(lista_id=lista_id, **dados)
     db.session.add(tarefa)
     db.session.commit()
     return TarefaSchema().dump(tarefa), 201
 
 
 @bp.patch("/tarefas/<int:tarefa_id>")
-def editar(tarefa_id):
+def concluir(tarefa_id):
     tarefa = _obter(tarefa_id)
-    dados = carregar(TarefaSchema(partial=True))
-    if tarefa.concluida and dados.get("concluida") is False:
+    concluida = carregar(TarefaSchema(only=("concluida",)))["concluida"]
+    if tarefa.concluida and not concluida:
         # Reabrir manda para o fim das pendentes; calculado antes do autoflush do novo estado.
         tarefa.ordem = db.session.scalar(_FIM_DAS_PENDENTES, {"lista_id": tarefa.lista_id})
-    for campo, valor in dados.items():
-        setattr(tarefa, campo, valor)  # define o valor enviado; repetir é idempotente
+    tarefa.concluida = concluida  # grava o valor enviado, nunca inverte; repetir é idempotente
     db.session.commit()
     return TarefaSchema().dump(tarefa)
-
-
-@bp.delete("/tarefas/<int:tarefa_id>")
-def excluir(tarefa_id):
-    db.session.delete(_obter(tarefa_id))
-    db.session.commit()
-    return "", 204
 
 
 @bp.put("/listas/<int:lista_id>/tarefas/ordem")
 def ordenar(lista_id):
     _exigir_lista(lista_id)
     pendentes = {t.id: t for t in db.session.scalars(_da_lista(lista_id, False))}
-    mensagem = "A lista de ids deve conter exatamente as tarefas pendentes desta lista."
+    mensagem = "A ordem enviada está desatualizada: recarregue as tarefas desta lista."
     for ordem, tarefa_id in enumerate(ler_ordem(set(pendentes), mensagem)):
         pendentes[tarefa_id].ordem = ordem
     db.session.commit()
-    return "", 204
+    return listar(lista_id)

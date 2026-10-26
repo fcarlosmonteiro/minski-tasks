@@ -86,7 +86,7 @@ def test_nome_da_lista_unico_sem_diferenciar_maiusculas(app):
 
 def test_persistencia_basica_via_schemas(app):
     lista = salvar(Lista(**ListaSchema().load({"nome": "  Universidade  "})))
-    tarefa = salvar(Tarefa(lista_id=lista.id, **TarefaSchema().load({"titulo": " Ler "})))
+    tarefa = salvar(Tarefa(lista_id=lista.id, **TarefaSchema(only=("titulo",)).load({"titulo": " Ler "})))
     db.session.expire_all()
 
     assert ListaSchema().dump(db.session.get(Lista, lista.id))["nome"] == "Universidade"

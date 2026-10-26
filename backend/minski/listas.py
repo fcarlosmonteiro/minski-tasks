@@ -4,7 +4,7 @@ from flask import Blueprint
 from marshmallow import fields
 from sqlalchemy import select, text
 
-from minski import Base, Texto, carregar, db, falhar, ler_ordem, tarefas
+from minski import Base, Texto, carregar, db, falhar, ler_ordem
 
 bp = Blueprint("listas", __name__, url_prefix="/api/listas")
 
@@ -38,11 +38,7 @@ def existe(lista_id):
 
 
 def _obter(lista_id):
-    return db.session.get(Lista, lista_id) or falhar(404, {"erro": "Lista não encontrada."})
-
-
-def _json(lista, pendentes):
-    return {**ListaSchema().dump(lista), "pendentes": pendentes}
+    return db.session.get(Lista, lista_id) or falhar(404, "Lista não encontrada.")
 
 
 def _exigir_nome_livre(nome, exceto=None):
@@ -51,14 +47,13 @@ def _exigir_nome_livre(nome, exceto=None):
     alvo = nome.casefold()
     nomes = db.session.execute(select(Lista.id, Lista.nome))
     if any(i != exceto and n.casefold() == alvo for i, n in nomes):
-        falhar(400, {"erros": {"nome": "Já existe uma lista com esse nome."}})
+        falhar(409, "Já existe uma lista com esse nome.")
 
 
 @bp.get("")
 def listar():
-    pendentes = tarefas.pendentes_por_lista()
     todas = db.session.scalars(select(Lista).order_by(Lista.ordem, Lista.id))
-    return [_json(lista, pendentes.get(lista.id, 0)) for lista in todas]
+    return ListaSchema(many=True).dump(todas)
 
 
 @bp.post("")
@@ -68,7 +63,7 @@ def criar():
     lista = Lista(**dados)
     db.session.add(lista)
     db.session.commit()
-    return _json(lista, 0), 201
+    return ListaSchema().dump(lista), 201
 
 
 @bp.patch("/<int:lista_id>")
@@ -78,7 +73,7 @@ def renomear(lista_id):
     _exigir_nome_livre(dados["nome"], exceto=lista.id)
     lista.nome = dados["nome"]
     db.session.commit()
-    return _json(lista, tarefas.pendentes_por_lista().get(lista.id, 0))
+    return ListaSchema().dump(lista)
 
 
 @bp.delete("/<int:lista_id>")
@@ -91,8 +86,8 @@ def excluir(lista_id):
 @bp.put("/ordem")
 def ordenar():
     atuais = set(db.session.scalars(select(Lista.id)))
-    ids = ler_ordem(atuais, "A lista de ids deve conter exatamente as listas atuais.")
+    ids = ler_ordem(atuais, "A ordem enviada está desatualizada: recarregue as listas.")
     for ordem, lista_id in enumerate(ids):
         db.session.get(Lista, lista_id).ordem = ordem
     db.session.commit()
-    return "", 204
+    return listar()
