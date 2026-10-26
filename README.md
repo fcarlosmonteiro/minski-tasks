@@ -31,5 +31,5 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r backend/requirements.txt
 cd backend
 pytest && ruff check .        # gates do backend
-flask --app minski run        # cria backend/instance/minski.db na primeira execução
+flask --app minski run        # cria backend/instance/minski.db (ou $MINSKI_DB_PATH)
 ```

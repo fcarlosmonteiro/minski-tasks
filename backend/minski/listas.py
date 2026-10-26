@@ -1,30 +1,28 @@
-from datetime import UTC, datetime
 from typing import ClassVar
 
 from flask import Blueprint
 from marshmallow import fields
 from sqlalchemy import select, text
 
-from minski import DATA_HORA, Base, Texto, carregar, db, falhar, ler_ordem, tarefas
+from minski import Base, Texto, carregar, db, falhar, ler_ordem, tarefas
 
 bp = Blueprint("listas", __name__, url_prefix="/api/listas")
 
 
 def _fim_da_fila(ctx):
     # ponytail: MAX+1 sem lock; dois inserts concorrentes podem empatar. Lock/UNIQUE se importar.
-    return ctx.connection.scalar(text("SELECT COALESCE(MAX(posicao), -1) + 1 FROM lista"))
+    return ctx.connection.scalar(text("SELECT COALESCE(MAX(ordem), -1) + 1 FROM lista"))
 
 
 class Lista(db.Model):
     __tablename__ = "lista"
-    # Um INSERT por linha: em lote, todas calculariam a posicao antes de qualquer gravação.
+    # Um INSERT por linha: em lote, todas calculariam a ordem antes de qualquer gravação.
     __mapper_args__: ClassVar[dict] = {"batch": False}
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     # Barreira final; a regra de unicidade (com acentos) é _exigir_nome_livre.
     nome = db.Column(db.String(60, collation="NOCASE"), nullable=False, unique=True)
-    posicao = db.Column(db.Integer, nullable=False, default=_fim_da_fila)
-    criada_em = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC))
+    ordem = db.Column(db.Integer, nullable=False, default=_fim_da_fila)
 
 
 class ListaSchema(Base):
@@ -32,8 +30,7 @@ class ListaSchema(Base):
     nome = Texto(
         "Informe o nome da lista.", "O nome da lista pode ter no máximo 60 caracteres.", 60
     )
-    posicao = fields.Integer(dump_only=True)
-    criada_em = fields.DateTime(DATA_HORA, dump_only=True)
+    ordem = fields.Integer(dump_only=True)
 
 
 def existe(lista_id):
@@ -60,7 +57,7 @@ def _exigir_nome_livre(nome, exceto=None):
 @bp.get("")
 def listar():
     pendentes = tarefas.pendentes_por_lista()
-    todas = db.session.scalars(select(Lista).order_by(Lista.posicao, Lista.id))
+    todas = db.session.scalars(select(Lista).order_by(Lista.ordem, Lista.id))
     return [_json(lista, pendentes.get(lista.id, 0)) for lista in todas]
 
 
@@ -95,7 +92,7 @@ def excluir(lista_id):
 def ordenar():
     atuais = set(db.session.scalars(select(Lista.id)))
     ids = ler_ordem(atuais, "A lista de ids deve conter exatamente as listas atuais.")
-    for posicao, lista_id in enumerate(ids):
-        db.session.get(Lista, lista_id).posicao = posicao
+    for ordem, lista_id in enumerate(ids):
+        db.session.get(Lista, lista_id).ordem = ordem
     db.session.commit()
     return "", 204

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import ClassVar
 
@@ -86,7 +87,9 @@ def create_app(config=None):
         static_folder=str(FRONTEND_DIST),
         static_url_path="",
     )
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///minski.db"  # em instance/
+    # Caminho relativo vai para instance/; no Docker, MINSKI_DB_PATH=/data/minski.db.
+    caminho = os.environ.get("MINSKI_DB_PATH", "minski.db")
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{caminho}"
     app.config.update(config or {})
     db.init_app(app)
 

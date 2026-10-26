@@ -57,13 +57,11 @@ def erro(resposta, status=400):
 def test_criar_lista_grava_sem_espacos_e_vai_para_o_fim(api):
     a = nova_lista(api, "  Trabalho  ")
     b = nova_lista(api, "Pessoal")
-    assert a == {"id": a["id"], "nome": "Trabalho", "posicao": 0,
-                 "criada_em": a["criada_em"], "pendentes": 0}
-    assert DATA.match(a["criada_em"])
-    assert b["posicao"] == 1
+    assert a == {"id": a["id"], "nome": "Trabalho", "ordem": 0, "pendentes": 0}
+    assert b["ordem"] == 1
 
 
-def test_listar_listas_por_posicao_com_contagem_de_pendentes(api):
+def test_listar_listas_por_ordem_com_contagem_de_pendentes(api):
     a, b = nova_lista(api, "A"), nova_lista(api, "B")
     nova_tarefa(api, b["id"])
     t = nova_tarefa(api, b["id"])
@@ -71,7 +69,7 @@ def test_listar_listas_por_posicao_com_contagem_de_pendentes(api):
     ok(api.put("/api/listas/ordem", json={"ids": [b["id"], a["id"]]}), 204)
 
     resposta = ok(api.get("/api/listas"))
-    assert [(x["nome"], x["posicao"], x["pendentes"]) for x in resposta] == [
+    assert [(x["nome"], x["ordem"], x["pendentes"]) for x in resposta] == [
         ("B", 0, 1), ("A", 1, 0)
     ]
 
@@ -87,7 +85,7 @@ def test_listar_listas_por_posicao_com_contagem_de_pendentes(api):
         ({"nome": 123}, INFORME_NOME),
         ({"nome": "x" * 61}, NOME_LONGO),
         ({"nome": "🎉" * 61}, NOME_LONGO),
-        ({"nome": "ok", "posicao": 3}, {"erros": {"posicao": "Campo não permitido."}}),
+        ({"nome": "ok", "ordem": 3}, {"erros": {"ordem": "Campo não permitido."}}),
         ({"nome": "ok", "cor": "azul"}, {"erros": {"cor": "Campo não permitido."}}),
     ],
 )
@@ -159,7 +157,7 @@ def test_reordenar_listas(api):
     resposta = api.put("/api/listas/ordem", json={"ids": [c, a, b]})
     assert resposta.status_code == 204 and resposta.data == b""
     assert [x["nome"] for x in ok(api.get("/api/listas"))] == ["C", "A", "B"]
-    assert nova_lista(api, "D")["posicao"] == 3
+    assert nova_lista(api, "D")["ordem"] == 3
 
 
 @pytest.mark.parametrize(
@@ -189,10 +187,9 @@ def test_criar_tarefa(api):
     lista = nova_lista(api)
     t = nova_tarefa(api, lista["id"], "  Ler capítulo 3 📖 ")
     assert t == {"id": t["id"], "lista_id": lista["id"], "titulo": "Ler capítulo 3 📖",
-                 "concluida": False, "posicao": 0, "criada_em": t["criada_em"],
+                 "concluida": False, "ordem": 0,
                  "concluida_em": None}
-    assert DATA.match(t["criada_em"])
-    assert nova_tarefa(api, lista["id"])["posicao"] == 1
+    assert nova_tarefa(api, lista["id"])["ordem"] == 1
 
 
 @pytest.mark.parametrize("metodo", ["post", "patch"])
@@ -273,11 +270,11 @@ def test_reabrir_manda_a_tarefa_para_o_fim_das_pendentes(api):
     ok(api.put(f"/api/listas/{lista_id}/tarefas/ordem", json={"ids": [c["id"], b["id"]]}), 204)
 
     reaberta = ok(api.patch(f"/api/tarefas/{a['id']}", json={"concluida": False}))
-    assert reaberta["posicao"] == 2
+    assert reaberta["ordem"] == 2
     assert [x["titulo"] for x in tarefas(api, lista_id)] == ["c", "b", "a"]
 
 
-def test_listar_tarefas_pendentes_por_posicao_e_concluidas_mais_recentes_primeiro(api):
+def test_listar_tarefas_pendentes_por_ordem_e_concluidas_mais_recentes_primeiro(api):
     lista_id = nova_lista(api)["id"]
     a, b, _c, d = (nova_tarefa(api, lista_id, n) for n in "abcd")
     for t in (b, d, a):
@@ -293,7 +290,7 @@ def test_tarefas_de_outra_lista_nao_aparecem(api):
     a, b = nova_lista(api, "A")["id"], nova_lista(api, "B")["id"]
     nova_tarefa(api, a, "de A")
     assert tarefas(api, b) == []
-    assert nova_tarefa(api, b)["posicao"] == 0
+    assert nova_tarefa(api, b)["ordem"] == 0
 
 
 def test_excluir_tarefa(api):
@@ -316,7 +313,7 @@ def test_reordenar_pendentes(api):
     a, b, c = (nova_tarefa(api, lista_id, n)["id"] for n in "abc")
     resposta = api.put(f"/api/listas/{lista_id}/tarefas/ordem", json={"ids": [c, a, b]})
     assert resposta.status_code == 204 and resposta.data == b""
-    assert [(x["titulo"], x["posicao"]) for x in tarefas(api, lista_id)] == [
+    assert [(x["titulo"], x["ordem"]) for x in tarefas(api, lista_id)] == [
         ("c", 0), ("a", 1), ("b", 2)
     ]
 

@@ -21,7 +21,7 @@ from minski import (
 bp = Blueprint("tarefas", __name__, url_prefix="/api")
 
 _FIM_DAS_PENDENTES = text(
-    "SELECT COALESCE(MAX(posicao), -1) + 1 FROM tarefa"
+    "SELECT COALESCE(MAX(ordem), -1) + 1 FROM tarefa"
     " WHERE lista_id = :lista_id AND concluida = 0"
 )
 
@@ -38,7 +38,7 @@ def _fim_das_pendentes(ctx):
 
 class Tarefa(db.Model):
     __tablename__ = "tarefa"
-    # Um INSERT por linha: em lote, todas calculariam a posicao antes de qualquer gravação.
+    # Um INSERT por linha: em lote, todas calculariam a ordem antes de qualquer gravação.
     __mapper_args__: ClassVar[dict] = {"batch": False}
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -49,8 +49,7 @@ class Tarefa(db.Model):
     titulo = db.Column(db.String(200), nullable=False)
     concluida = db.Column(db.Boolean, nullable=False, default=False)
     concluida_em = db.Column(db.DateTime, nullable=True)
-    posicao = db.Column(db.Integer, nullable=False, default=_fim_das_pendentes)
-    criada_em = db.Column(db.DateTime, nullable=False, default=_agora)
+    ordem = db.Column(db.Integer, nullable=False, default=_fim_das_pendentes)
 
     @validates("concluida")
     def _marcar_conclusao(self, _key, concluida):
@@ -68,8 +67,7 @@ class TarefaSchema(Base):
         "Informe o título da tarefa.", "O título da tarefa pode ter no máximo 200 caracteres.", 200
     )
     concluida = Booleano()
-    posicao = fields.Integer(dump_only=True)
-    criada_em = fields.DateTime(DATA_HORA, dump_only=True)
+    ordem = fields.Integer(dump_only=True)
     concluida_em = fields.DateTime(DATA_HORA, dump_only=True)
 
 
@@ -99,7 +97,7 @@ def _da_lista(lista_id, concluida):
 @bp.get("/listas/<int:lista_id>/tarefas")
 def listar(lista_id):
     _exigir_lista(lista_id)
-    pendentes = _da_lista(lista_id, False).order_by(Tarefa.posicao, Tarefa.id)
+    pendentes = _da_lista(lista_id, False).order_by(Tarefa.ordem, Tarefa.id)
     concluidas = _da_lista(lista_id, True).order_by(Tarefa.concluida_em.desc(), Tarefa.id.desc())
     todas = [*db.session.scalars(pendentes), *db.session.scalars(concluidas)]
     return TarefaSchema(many=True).dump(todas)
@@ -120,7 +118,7 @@ def editar(tarefa_id):
     dados = carregar(TarefaSchema(partial=True))
     if tarefa.concluida and dados.get("concluida") is False:
         # Reabrir manda para o fim das pendentes; calculado antes do autoflush do novo estado.
-        tarefa.posicao = db.session.scalar(_FIM_DAS_PENDENTES, {"lista_id": tarefa.lista_id})
+        tarefa.ordem = db.session.scalar(_FIM_DAS_PENDENTES, {"lista_id": tarefa.lista_id})
     for campo, valor in dados.items():
         setattr(tarefa, campo, valor)  # define o valor enviado; repetir é idempotente
     db.session.commit()
@@ -139,7 +137,7 @@ def ordenar(lista_id):
     _exigir_lista(lista_id)
     pendentes = {t.id: t for t in db.session.scalars(_da_lista(lista_id, False))}
     mensagem = "A lista de ids deve conter exatamente as tarefas pendentes desta lista."
-    for posicao, tarefa_id in enumerate(ler_ordem(set(pendentes), mensagem)):
-        pendentes[tarefa_id].posicao = posicao
+    for ordem, tarefa_id in enumerate(ler_ordem(set(pendentes), mensagem)):
+        pendentes[tarefa_id].ordem = ordem
     db.session.commit()
     return "", 204

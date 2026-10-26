@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from marshmallow import ValidationError
 from sqlalchemy import inspect, select
@@ -24,9 +26,9 @@ def salvar(*objs):
 def test_schema_criado_com_os_campos_da_spec(app):
     insp = inspect(db.engine)
     colunas = lambda t: {c["name"] for c in insp.get_columns(t)}
-    assert colunas("lista") == {"id", "nome", "posicao", "criada_em"}
+    assert colunas("lista") == {"id", "nome", "ordem"}
     assert colunas("tarefa") == {
-        "id", "lista_id", "titulo", "concluida", "concluida_em", "posicao", "criada_em"
+        "id", "lista_id", "titulo", "concluida", "concluida_em", "ordem"
     }
     [fk] = insp.get_foreign_keys("tarefa")
     assert fk["referred_table"] == "lista" and fk["options"]["ondelete"] == "CASCADE"
@@ -34,20 +36,19 @@ def test_schema_criado_com_os_campos_da_spec(app):
 
 def test_defaults_de_lista_e_tarefa(app):
     a, b = salvar(Lista(nome="Trabalho"), Lista(nome="Pessoal"))
-    assert (a.posicao, b.posicao) == (0, 1)
-    assert a.criada_em is not None
+    assert (a.ordem, b.ordem) == (0, 1)
 
     t1 = salvar(Tarefa(lista_id=a.id, titulo="Relatório"))
     assert t1.concluida is False and t1.concluida_em is None
-    assert t1.posicao == 0 and t1.criada_em is not None
+    assert t1.ordem == 0
 
 
-def test_posicao_da_tarefa_vai_para_o_fim_das_pendentes_da_lista(app):
+def test_ordem_da_tarefa_vai_para_o_fim_das_pendentes_da_lista(app):
     a, b = salvar(Lista(nome="A"), Lista(nome="B"))
     salvar(Tarefa(lista_id=a.id, titulo="p0"), Tarefa(lista_id=a.id, titulo="p1"))
-    salvar(Tarefa(lista_id=a.id, titulo="feita", concluida=True, posicao=99))
-    assert salvar(Tarefa(lista_id=a.id, titulo="nova")).posicao == 2
-    assert salvar(Tarefa(lista_id=b.id, titulo="outra lista")).posicao == 0
+    salvar(Tarefa(lista_id=a.id, titulo="feita", concluida=True, ordem=99))
+    assert salvar(Tarefa(lista_id=a.id, titulo="nova")).ordem == 2
+    assert salvar(Tarefa(lista_id=b.id, titulo="outra lista")).ordem == 0
 
 
 def test_concluir_preenche_e_reabrir_apaga_concluida_em(app):
@@ -106,3 +107,27 @@ def test_persistencia_basica_via_schemas(app):
 def test_schemas_recusam_dados_invalidos(schema, dados):
     with pytest.raises(ValidationError):
         schema().load(dados)
+
+
+def test_caminho_do_banco_vem_de_minski_db_path(tmp_path, monkeypatch):
+    destino = tmp_path / "dados.db"
+    monkeypatch.setenv("MINSKI_DB_PATH", str(destino))
+    app = create_app()
+    with app.app_context():
+        salvar(Lista(nome="Casa"))
+        db.engine.dispose()
+    assert destino.exists()
+
+    # Persistência: outra instância da aplicação lê o mesmo arquivo.
+    with create_app().app_context():
+        assert db.session.scalars(select(Lista.nome)).all() == ["Casa"]
+        db.engine.dispose()
+
+
+def test_padrao_do_banco_e_instance_minski_db(monkeypatch):
+    monkeypatch.delenv("MINSKI_DB_PATH", raising=False)
+    monkeypatch.setattr(db, "create_all", lambda: None)  # não cria o banco real
+    app = create_app()
+    with app.app_context():
+        assert db.engine.url.database == os.path.join(app.instance_path, "minski.db")
+    assert os.path.basename(app.instance_path) == "instance"
