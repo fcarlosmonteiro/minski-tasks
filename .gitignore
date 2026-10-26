@@ -221,3 +221,5 @@ __marimo__/
 
 # Frontend
 node_modules/
+test-results/
+playwright-report/

@@ -58,6 +58,8 @@ These have to pass before anything is submitted.
 - Tests: `pytest` (ou `cd backend && pytest`) · `cd frontend && npx vitest run`
 - Lint: `ruff check .` · `cd frontend && npx eslint . && npx prettier --check .`
 - Build: `cd frontend && npx vite build`
+- E2E (decisão Q4, Playwright sobre o docker-compose num projeto e volume próprios):
+  `FRONTEND_PORT=5174 docker compose -p minski-e2e up -d --build && (cd frontend && npx playwright install chromium && npx playwright test)`
 - Security (decisão Q6: bloqueia segredo e HIGH/CRITICAL; MEDIUM/LOW só registrados):
   `semgrep scan --config p/default --metrics off --severity ERROR --error` ·
   `docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 git /repo --redact` ·

@@ -44,3 +44,13 @@ O backend grava o SQLite em `/data/minski.db` (`MINSKI_DB_PATH`), num volume
 nomeado `minski-dados` que sobrevive a `docker compose down` e à recriação dos
 contêineres; `docker compose down -v` apaga os dados. Só a porta 5173 do
 frontend é publicada, e só em 127.0.0.1; o Vite repassa `/api` ao backend.
+
+### Testes ponta a ponta (Playwright)
+
+```bash
+FRONTEND_PORT=5174 docker compose -p minski-e2e up -d --build   # projeto e volume próprios
+cd frontend && npx playwright install chromium && npx playwright test
+```
+
+Os testes criam só dados com prefixo `E2E ` e os apagam no fim; reiniciam e
+recriam os contêineres do projeto `minski-e2e` para provar a persistência.
