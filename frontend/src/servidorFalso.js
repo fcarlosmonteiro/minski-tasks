@@ -48,6 +48,43 @@ export function servidorFalso({ listas = [], tarefas = [] } = {}) {
       db.listas.push(lista);
       return [201, lista];
     }
+    const ordenar = (itens) => {
+      const ids = corpo?.ids;
+      const atuais = itens.map((x) => x.id).sort();
+      if (
+        !Array.isArray(ids) ||
+        ids.length !== atuais.length ||
+        [...ids].sort().some((id, i) => id !== atuais[i])
+      )
+        return null;
+      ids.forEach((id, i) => (itens.find((x) => x.id === id).ordem = i));
+      return true;
+    };
+    if (caminho === "/api/listas/ordem" && metodo === "PUT")
+      return ordenar(db.listas)
+        ? rotear("GET", "/api/listas")
+        : erro(
+            400,
+            "VALIDACAO",
+            "A ordem enviada está desatualizada: recarregue as listas.",
+          );
+    if (
+      (m = caminho.match(/^\/api\/listas\/(\d+)\/tarefas\/ordem$/)) &&
+      metodo === "PUT"
+    ) {
+      const id = Number(m[1]);
+      if (!db.listas.some((l) => l.id === id))
+        return erro(404, "NAO_ENCONTRADO", "Lista não encontrada.");
+      return ordenar(
+        db.tarefas.filter((t) => t.lista_id === id && !t.concluida),
+      )
+        ? rotear("GET", `/api/listas/${id}/tarefas`)
+        : erro(
+            400,
+            "VALIDACAO",
+            "A ordem enviada está desatualizada: recarregue as tarefas desta lista.",
+          );
+    }
     if ((m = caminho.match(/^\/api\/listas\/(\d+)(\/tarefas)?$/))) {
       const lista = db.listas.find((l) => l.id === Number(m[1]));
       if (!lista) return erro(404, "NAO_ENCONTRADO", "Lista não encontrada.");

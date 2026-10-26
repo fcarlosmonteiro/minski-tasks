@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api, ApiError, nomeDaLista, tituloDaTarefa } from "./api.js";
 
@@ -53,7 +53,55 @@ function useSalvar(mutationFn, invalidar) {
   }).mutateAsync;
 }
 
-function Tarefa({ tarefa, queryKey }) {
+/**
+ * Arrastar e soltar nativo (e Alt+↑/↓ pelo teclado) para reordenar os itens de `ler(dados)`.
+ * Envia todos os ids na nova ordem; se o servidor recusar (ids desatualizados), descarta a
+ * ordem otimista e recarrega a atual. O aviso vem do tratamento comum de erros.
+ */
+function useOrdenacao(queryKey, caminho, ler, gravar) {
+  const client = useQueryClient();
+  const origem = useRef(null);
+  const salvar = useMutation({
+    mutationFn: ({ ids }) => api(caminho, { method: "PUT", body: { ids } }),
+    onSuccess: (dados) => client.setQueryData(queryKey, dados),
+    onError: (_erro, { antes }) => {
+      client.setQueryData(queryKey, antes);
+      client.invalidateQueries({ queryKey });
+    },
+  });
+
+  function mover(de, para) {
+    const antes = client.getQueryData(queryKey);
+    const itens = [...ler(antes)];
+    if (de === para || para < 0 || para >= itens.length) return;
+    itens.splice(para, 0, ...itens.splice(de, 1));
+    client.setQueryData(queryKey, gravar(antes, itens));
+    salvar.mutate({ ids: itens.map((i) => i.id), antes });
+  }
+
+  // Cada lista de itens tem sua própria origem: soltar em outra lista não faz nada.
+  return (i) => ({
+    draggable: true,
+    onDragStart: (e) => {
+      origem.current = i;
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+    },
+    onDragOver: (e) => origem.current !== null && e.preventDefault(),
+    onDragEnd: () => (origem.current = null),
+    onDrop: (e) => {
+      e.preventDefault();
+      if (origem.current !== null) mover(origem.current, i);
+      origem.current = null;
+    },
+    onKeyDown: (e) => {
+      if (!e.altKey || !["ArrowUp", "ArrowDown"].includes(e.key)) return;
+      e.preventDefault();
+      mover(i, e.key === "ArrowUp" ? i - 1 : i + 1);
+    },
+  });
+}
+
+function Tarefa({ tarefa, queryKey, arrasto }) {
   const client = useQueryClient();
   const concluir = useMutation({
     mutationFn: ({ concluida }) =>
@@ -97,7 +145,7 @@ function Tarefa({ tarefa, queryKey }) {
   }
 
   return (
-    <li className="list-group-item">
+    <li className="list-group-item" {...arrasto}>
       <input
         type="checkbox"
         className="form-check-input me-2"
@@ -115,6 +163,13 @@ function Tarefa({ tarefa, queryKey }) {
 function Tarefas({ lista }) {
   const queryKey = ["tarefas", lista.id];
   const [abertas, setAbertas] = useState(false);
+  // Só as pendentes reordenam; concluídas não recebem `arrasto`.
+  const arrastar = useOrdenacao(
+    queryKey,
+    `/listas/${lista.id}/tarefas/ordem`,
+    (dados) => dados.pendentes,
+    (dados, pendentes) => ({ ...dados, pendentes }),
+  );
   const { data } = useQuery({
     queryKey,
     queryFn: () => api(`/listas/${lista.id}/tarefas`),
@@ -139,8 +194,13 @@ function Tarefas({ lista }) {
         <p className="text-body-secondary mt-3">Nenhuma tarefa nesta lista.</p>
       ) : (
         <ul className="list-group mt-3" aria-label="Pendentes">
-          {data.pendentes.map((t) => (
-            <Tarefa key={t.id} tarefa={t} queryKey={queryKey} />
+          {data.pendentes.map((t, i) => (
+            <Tarefa
+              key={t.id}
+              tarefa={t}
+              queryKey={queryKey}
+              arrasto={arrastar(i)}
+            />
           ))}
         </ul>
       )}
@@ -241,6 +301,12 @@ export default function Listas() {
     queryFn: () => api("/listas"),
   });
   const [selecionadaId, setSelecionadaId] = useState(null);
+  const arrastar = useOrdenacao(
+    ["listas"],
+    "/listas/ordem",
+    (dados) => dados,
+    (_dados, novas) => novas,
+  );
   const criar = useSalvar(
     (nome) => api("/listas", { method: "POST", body: { nome } }),
     [["listas"]],
@@ -260,9 +326,10 @@ export default function Listas() {
             </p>
           )}
           <div className="list-group mb-3">
-            {listas?.map((lista) => (
+            {listas?.map((lista, i) => (
               <button
                 key={lista.id}
+                {...arrastar(i)}
                 type="button"
                 className={`list-group-item list-group-item-action${lista === selecionada ? " active" : ""}`}
                 aria-current={lista === selecionada}

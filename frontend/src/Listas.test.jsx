@@ -1,4 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, expect, test, vi } from "vitest";
@@ -264,4 +270,140 @@ test("falha de rede ao concluir mostra aviso e mantém a tela", async () => {
   );
   expect(nomes(pendentes())).toEqual(["Relatório", "Reunião"]);
   expect(screen.getByLabelText("Relatório")).not.toBeChecked();
+});
+
+// --- arrastar e soltar ------------------------------------------------------
+
+function arrastar(de, para) {
+  fireEvent.dragStart(de);
+  fireEvent.dragOver(para);
+  fireEvent.drop(para);
+  fireEvent.dragEnd(de);
+}
+const puts = (srv) =>
+  srv.chamadas
+    .filter(([m]) => m === "PUT")
+    .map(([, url, corpo]) => [url, corpo]);
+const botoesDeLista = () =>
+  within(screen.getByRole("navigation"))
+    .getAllByRole("button")
+    .map((b) => b.textContent);
+
+test("arrastar lista envia todos os ids na nova ordem e grava", async () => {
+  const srv = servidorFalso(DUAS_LISTAS);
+  abrir();
+  await screen.findByRole("heading", { name: "Trabalho" });
+  arrastar(
+    screen.getByRole("button", { name: "Pessoal" }),
+    screen.getByRole("button", { name: "Trabalho" }),
+  );
+  await waitFor(() => expect(botoesDeLista()).toEqual(["Pessoal", "Trabalho"]));
+  await waitFor(() =>
+    expect(puts(srv)).toEqual([["/api/listas/ordem", { ids: [2, 1] }]]),
+  );
+  expect(srv.listas.find((l) => l.id === 2).ordem).toBe(0);
+});
+
+test("arrastar tarefa envia só as pendentes da lista; concluídas não arrastam", async () => {
+  const srv = servidorFalso(DUAS_LISTAS);
+  const user = abrir();
+  await screen.findByText("Relatório");
+  arrastar(
+    screen.getByText("Reunião").closest("li"),
+    screen.getByText("Relatório").closest("li"),
+  );
+  await waitFor(() =>
+    expect(nomes(pendentes())).toEqual(["Reunião", "Relatório"]),
+  );
+  await waitFor(() =>
+    expect(puts(srv)).toEqual([
+      ["/api/listas/1/tarefas/ordem", { ids: [11, 10] }],
+    ]),
+  );
+
+  await user.click(screen.getByRole("button", { name: "Concluídas (2)" }));
+  const concluidas = within(
+    screen.getByRole("list", { name: "Concluídas" }),
+  ).getAllByRole("listitem");
+  concluidas.forEach((li) => expect(li).not.toHaveAttribute("draggable"));
+  arrastar(concluidas[0], screen.getByText("Reunião").closest("li"));
+  expect(puts(srv)).toHaveLength(1);
+});
+
+test("soltar tarefa sobre uma lista não move nada entre listas", async () => {
+  const srv = servidorFalso(DUAS_LISTAS);
+  abrir();
+  await screen.findByText("Relatório");
+  arrastar(
+    screen.getByText("Relatório").closest("li"),
+    screen.getByRole("button", { name: "Pessoal" }),
+  );
+  expect(puts(srv)).toEqual([]);
+  expect(botoesDeLista()).toEqual(["Trabalho", "Pessoal"]);
+});
+
+test("Alt+seta reordena pelo teclado", async () => {
+  const srv = servidorFalso(DUAS_LISTAS);
+  const user = abrir();
+  (await screen.findByLabelText("Reunião")).focus();
+  await user.keyboard("{Alt>}{ArrowUp}{/Alt}");
+  await waitFor(() =>
+    expect(nomes(pendentes())).toEqual(["Reunião", "Relatório"]),
+  );
+  await waitFor(() =>
+    expect(puts(srv)).toEqual([
+      ["/api/listas/1/tarefas/ordem", { ids: [11, 10] }],
+    ]),
+  );
+});
+
+test("ordem desatualizada: servidor recusa, aviso aparece e a ordem atual é recarregada", async () => {
+  const srv = servidorFalso(DUAS_LISTAS);
+  abrir();
+  await screen.findByText("Relatório");
+  // Outra aba criou uma tarefa: a ordem desta tela ficou desatualizada.
+  srv.tarefas.push({
+    id: 99,
+    lista_id: 1,
+    titulo: "De outra aba",
+    concluida: false,
+    ordem: 99,
+    concluida_em: null,
+  });
+  arrastar(
+    screen.getByText("Reunião").closest("li"),
+    screen.getByText("Relatório").closest("li"),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "A ordem enviada está desatualizada: recarregue as tarefas desta lista.",
+  );
+  await waitFor(() =>
+    expect(nomes(pendentes())).toEqual([
+      "Relatório",
+      "Reunião",
+      "De outra aba",
+    ]),
+  );
+  expect(srv.tarefas.find((t) => t.id === 10).ordem).toBe(10); // nada foi gravado
+});
+
+test("lista excluída em outra aba: reordenar listas é recusado e recarrega", async () => {
+  const srv = servidorFalso(DUAS_LISTAS);
+  abrir();
+  await screen.findByRole("heading", { name: "Trabalho" });
+  srv.listas.push({ id: 3, nome: "Nova de outra aba", ordem: 2 });
+  arrastar(
+    screen.getByRole("button", { name: "Pessoal" }),
+    screen.getByRole("button", { name: "Trabalho" }),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "recarregue as listas",
+  );
+  await waitFor(() =>
+    expect(botoesDeLista()).toEqual([
+      "Trabalho",
+      "Pessoal",
+      "Nova de outra aba",
+    ]),
+  );
 });
