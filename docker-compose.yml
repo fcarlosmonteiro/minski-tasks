@@ -1,0 +1,21 @@
+# Desenvolvimento local: http://localhost:5173 (o Vite repassa /api ao backend).
+services:
+  backend:
+    build: ./backend
+    environment:
+      MINSKI_DB_PATH: /data/minski.db
+    volumes:
+      - minski-dados:/data
+    # Sem porta publicada: só o frontend fala com ele, pela rede do Compose.
+
+  frontend:
+    build: ./frontend
+    environment:
+      API_URL: http://backend:5000
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  minski-dados:

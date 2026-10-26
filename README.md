@@ -33,3 +33,14 @@ cd backend
 pytest && ruff check .        # gates do backend
 flask --app minski run        # cria backend/instance/minski.db (ou $MINSKI_DB_PATH)
 ```
+
+### Docker Compose (desenvolvimento local)
+
+```bash
+docker compose up --build     # abre em http://localhost:5173
+```
+
+O backend grava o SQLite em `/data/minski.db` (`MINSKI_DB_PATH`), num volume
+nomeado `minski-dados` que sobrevive a `docker compose down` e à recriação dos
+contêineres; `docker compose down -v` apaga os dados. Só a porta 5173 do
+frontend é publicada, e só em 127.0.0.1; o Vite repassa `/api` ao backend.
