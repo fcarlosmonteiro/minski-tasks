@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api, ApiError, nomeDaLista, tituloDaTarefa } from "./api.js";
 
@@ -101,6 +101,8 @@ function useOrdenacao(queryKey, caminho, ler, gravar) {
   });
 }
 
+export const ESPERA_MS = 600;
+
 function Tarefa({ tarefa, queryKey, arrasto }) {
   const client = useQueryClient();
   const concluir = useMutation({
@@ -121,7 +123,31 @@ function Tarefa({ tarefa, queryKey, arrasto }) {
     },
   });
 
+  // Decisão do PO (pergunta 01M5WZHK10EEM81GPCQB4J9E27): a caixa muda na hora, mas a tarefa
+  // só troca de seção após ESPERA_MS; cliques nesse intervalo valem pelo último e só o
+  // valor final vai ao servidor. Assim um clique duplo não cai em outra tarefa.
+  const [marcada, setMarcada] = useState(null);
+  const pendente = useRef(null);
+  useEffect(
+    () => () => {
+      clearTimeout(pendente.current?.timer);
+      pendente.current?.aplicar(); // trocou de lista antes do prazo: não perde o clique
+    },
+    [],
+  );
+
   function alternar(concluida) {
+    setMarcada(concluida);
+    clearTimeout(pendente.current?.timer);
+    const aplicar = () => {
+      pendente.current = null;
+      setMarcada(null);
+      if (concluida !== tarefa.concluida) mover(concluida);
+    };
+    pendente.current = { aplicar, timer: setTimeout(aplicar, ESPERA_MS) };
+  }
+
+  function mover(concluida) {
     const antes = client.getQueryData(queryKey);
     const outras = (t) => t.id !== tarefa.id;
     const movida = {
@@ -150,7 +176,7 @@ function Tarefa({ tarefa, queryKey, arrasto }) {
         type="checkbox"
         className="form-check-input me-2"
         id={`tarefa-${tarefa.id}`}
-        checked={tarefa.concluida}
+        checked={marcada ?? tarefa.concluida}
         onChange={(e) => alternar(e.target.checked)}
       />
       <label className="form-check-label" htmlFor={`tarefa-${tarefa.id}`}>

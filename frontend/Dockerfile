@@ -1,4 +1,4 @@
-FROM node:24-alpine
+FROM node:24.22.1-alpine
 # O Vite grava arquivos temporários em /app, então o diretório é do usuário node.
 RUN mkdir /app && chown node:node /app
 WORKDIR /app

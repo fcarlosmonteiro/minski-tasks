@@ -239,24 +239,31 @@ test("marcar conclui e desmarcar devolve às pendentes, enviando o valor desejad
   expect(patches).toEqual([{ concluida: true }, { concluida: false }]);
 });
 
-test("cliques rápidos saem em série e terminam no último valor", async () => {
+test("cliques rápidos: a caixa muda na hora e só o último valor vai ao servidor", async () => {
   const srv = servidorFalso(DUAS_LISTAS);
   const user = abrir();
-  await user.click(
-    await screen.findByRole("button", { name: "Concluídas (2)" }),
-  );
-  for (let i = 0; i < 3; i++)
-    await user.click(screen.getByLabelText("Relatório"));
-  await waitFor(() =>
-    expect(srv.chamadas.filter(([m]) => m === "PATCH")).toHaveLength(3),
-  );
+  const caixa = await screen.findByLabelText("Relatório");
+  await user.click(caixa);
+  expect(caixa).toBeChecked(); // estado visual imediato, ainda nas pendentes
+  expect(nomes(pendentes())).toEqual(["Relatório", "Reunião"]);
+  await user.click(caixa);
+  await user.click(caixa);
+  await waitFor(() => expect(nomes(pendentes())).toEqual(["Reunião"]));
   await waitFor(() => expect(srv.emVoo).toBe(0));
   expect(
-    srv.chamadas.filter(([m]) => m === "PATCH").map(([, , c]) => c.concluida),
-  ).toEqual([true, false, true]);
-  expect(srv.maxEmVoo).toBe(1);
-  expect(srv.tarefas.find((t) => t.id === 10).concluida).toBe(true);
-  await waitFor(() => expect(screen.getByLabelText("Relatório")).toBeChecked());
+    srv.chamadas.filter(([m]) => m === "PATCH").map(([, , c]) => c),
+  ).toEqual([{ concluida: true }]);
+  expect(srv.tarefas.find((t) => t.id === 11).concluida).toBe(false);
+});
+
+test("clique duplo volta ao estado inicial sem chamar o servidor", async () => {
+  const srv = servidorFalso(DUAS_LISTAS);
+  const user = abrir();
+  await user.dblClick(await screen.findByLabelText("Relatório"));
+  await new Promise((r) => setTimeout(r, 700));
+  expect(nomes(pendentes())).toEqual(["Relatório", "Reunião"]);
+  expect(screen.getByLabelText("Relatório")).not.toBeChecked();
+  expect(srv.chamadas.filter(([m]) => m === "PATCH")).toEqual([]);
 });
 
 test("falha de rede ao concluir mostra aviso e mantém a tela", async () => {

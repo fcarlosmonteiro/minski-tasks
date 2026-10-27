@@ -182,35 +182,36 @@ test("AC8/AC9/AC19: concluir, desconcluir, «Concluídas» recolhida e ordenada"
   await expect(concluidas(page)).toHaveText(["Relatório"]);
 });
 
-test("edge: dois cliques rápidos terminam no estado do último clique", async ({
+test("edge: clique duplo vale pelo último clique e não altera outra tarefa", async ({
   page,
   request,
 }) => {
   await page.goto("/listas");
-  await page.getByRole("button", { name: /^Concluídas/ }).click(); // a caixa fica visível nas duas seções
+  const id = await idDaLista(request, `${P}Trabalho`);
+  const estado = async () =>
+    (await request.get(`/api/listas/${id}/tarefas`)).json();
+  await expect(pendentes(page)).toHaveText(["Reunião", "E-mails"]); // há tarefa abaixo da clicada
+  const antes = await estado();
   const enviados = [];
   page.on(
     "request",
     (r) => r.method() === "PATCH" && enviados.push(r.postDataJSON()),
   );
 
-  // Dois cliques seguidos na mesma caixa, sem esperar resposta entre eles. (Um dblclick
-  // físico cai em outro elemento: a tarefa muda de seção entre os cliques.)
-  await caixa(page, "Reunião").click();
-  await caixa(page, "Reunião").click();
+  await caixa(page, "Reunião").dblclick(); // marca e desmarca: o último clique é desmarcar
+  await page.waitForTimeout(1000); // passa a espera de 600 ms antes da troca de seção
   await expect(caixa(page, "Reunião")).not.toBeChecked();
-  await expect
-    .poll(() => enviados)
-    .toEqual([{ concluida: true }, { concluida: false }]);
-  const id = await idDaLista(request, `${P}Trabalho`);
-  await expect
-    .poll(async () => {
-      const dados = await (
-        await request.get(`/api/listas/${id}/tarefas`)
-      ).json();
-      return dados.pendentes.find((t) => t.titulo === "Reunião")?.concluida;
-    })
-    .toBe(false);
+  await expect(caixa(page, "E-mails")).not.toBeChecked();
+  await expect(pendentes(page)).toHaveText(["Reunião", "E-mails"]);
+  expect(enviados).toEqual([]); // estado final igual ao inicial: nada a gravar
+  expect(await estado()).toEqual(antes); // nenhuma tarefa mudou no servidor
+
+  await caixa(page, "Reunião").click(); // um clique só: conclui após a espera
+  await expect(pendentes(page)).toHaveText(["E-mails"]);
+  await expect.poll(() => enviados).toEqual([{ concluida: true }]);
+  await page.getByRole("button", { name: /^Concluídas/ }).click();
+  await caixa(page, "Reunião").click(); // devolve às pendentes para os testes seguintes
+  await expect(pendentes(page)).toHaveText(["E-mails", "Reunião"]);
 });
 
 test("AC10/AC11: arrastar listas e pendentes grava a nova ordem", async ({
