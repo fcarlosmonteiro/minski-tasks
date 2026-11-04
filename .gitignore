@@ -1,0 +1,16 @@
+# Segredos e configuração local
+.env
+.env.*
+.claude/settings.local.json
+
+# Banco SQLite local
+*.db
+*.sqlite3
+
+# Dependências e saídas de build
+node_modules/
+dist/
+__pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
