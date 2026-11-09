@@ -8,6 +8,7 @@ from flask import Flask
 from sqlalchemy import event
 from sqlalchemy.engine import URL
 
+from minski.api import api
 from minski.models import db
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -35,6 +36,7 @@ def create_app() -> Flask:
     ).render_as_string()
 
     db.init_app(app)
+    app.register_blueprint(api)
     with app.app_context():
         event.listen(db.engine, "connect", _ativar_chaves_estrangeiras)
         db.create_all()
