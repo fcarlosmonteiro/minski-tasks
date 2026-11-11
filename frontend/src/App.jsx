@@ -1,6 +1,7 @@
 import { useEffect, useReducer } from 'react'
 import { buscarListas, FALHA_AO_CARREGAR_LISTAS } from './api.js'
 import { enviarNovaLista, estadoInicial, reduzirListas } from './estado.js'
+import ListaAberta from './ListaAberta.jsx'
 
 export default function App() {
   const [estado, dispatch] = useReducer(reduzirListas, estadoInicial)
@@ -86,7 +87,7 @@ export default function App() {
 
           <main className="col py-3 px-4">
             {selecionada ? (
-              <h2 className="h4 text-break">{selecionada.nome}</h2>
+              <ListaAberta key={selecionada.id} lista={selecionada} />
             ) : (
               <p className="text-body-secondary">
                 Selecione uma lista na barra lateral ou crie uma nova.

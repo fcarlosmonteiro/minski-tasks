@@ -10,10 +10,10 @@ export const estadoInicial = {
   erroCarregar: null,
 }
 
-// Mantém listas criadas antes de a carga inicial terminar.
-function mesclarListas(carregadas, atuais) {
-  const ids = new Set(carregadas.map((lista) => lista.id))
-  return [...carregadas, ...atuais.filter((lista) => !ids.has(lista.id))]
+// Mantém itens criados antes de a carga inicial terminar.
+export function mesclarPorId(carregados, atuais) {
+  const ids = new Set(carregados.map((item) => item.id))
+  return [...carregados, ...atuais.filter((item) => !ids.has(item.id))]
 }
 
 export function reduzirListas(estado, acao) {
@@ -21,7 +21,7 @@ export function reduzirListas(estado, acao) {
     case 'listas-carregadas':
       return {
         ...estado,
-        listas: mesclarListas(acao.listas, estado.listas),
+        listas: mesclarPorId(acao.listas, estado.listas),
         erroCarregar: null,
       }
     case 'carregamento-falhou':
